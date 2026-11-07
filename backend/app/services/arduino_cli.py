@@ -304,6 +304,11 @@ class ArduinoCLIService:
 
     def _ensure_board_urls(self):
         """Register additional board-manager URLs in arduino-cli config."""
+        if os.environ.get("VELXIO_AVR_ONLY") == "1":
+            # AVR-only deployments deliberately skip the network update of
+            # ESP32/RP2040/ATtiny board indexes at process startup.
+            self._registered_urls = set()
+            return
         try:
             # Ensure config file exists (arduino-cli requires it for config add)
             result = subprocess.run(

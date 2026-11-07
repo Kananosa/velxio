@@ -10,6 +10,7 @@ import { ExamplesPage } from './pages/ExamplesPage';
 import { ExampleDetailPage } from './pages/ExampleDetailPage';
 import { ExampleEditorPage } from './pages/ExampleEditorPage';
 import { ImageToCodePage } from './pages/ImageToCodePage';
+import { EmbedPage } from './pages/EmbedPage';
 import { LocaleSync } from './i18n/LocaleSync';
 import { NON_DEFAULT_LOCALES } from './i18n/config';
 import { useProRoutes, useProRoutesSettled } from './lib/proRoutes';
@@ -48,6 +49,7 @@ const ROOT_ELEMENT: ReactElement = <RootRoute />;
 const ROUTES: { path: string; element: ReactElement; index?: boolean }[] = [
   { path: '/', element: ROOT_ELEMENT, index: true },
   { path: 'editor', element: <EditorPage /> },
+  { path: 'embed', element: <EmbedPage /> },
   { path: 'examples', element: <ExamplesPage /> },
   // /examples/<id> = SEO landing (preview, badges, "Open in Simulator" CTA).
   // /example/<id>  = live editor with the example pre-loaded; the URL
