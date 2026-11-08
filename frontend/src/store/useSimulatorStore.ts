@@ -64,6 +64,7 @@ import { isBoardSeated } from '../utils/socketSnap';
 import { computeSeating } from '../utils/breadboardSnap';
 import { createSerialBatcher } from './serialBatcher';
 import { emitSerialTap } from './serialTap';
+import { emitPinTap } from './pinTap';
 import { applySerialWireDisplay, applySerialWireTransmit, nominalBaud } from './serialWire';
 import type { SerialLink } from './serialWire';
 
@@ -2049,6 +2050,7 @@ export const useSimulatorStore = create<SimulatorState>((set, get) => {
 
   function getOscilloscopeCallback(boardId: string) {
     const feed = (pin: number, state: boolean, timeMs: number) => {
+      emitPinTap(boardId, pin, state, timeMs);
       const { channels, pushSample } = useOscilloscopeStore.getState();
       for (const ch of channels) {
         // Analog channels are fed by the SPICE bridge, not by GPIO edges —

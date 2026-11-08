@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { exampleProjects } from '../data/examples'
+import { installPinTap } from '../store/pinTap'
+import { installSerialTap } from '../store/serialTap'
+import { useSimulatorStore } from '../store/useSimulatorStore'
 import { loadExample } from '../utils/loadExample'
 import { importVlxFile } from '../utils/vlxFile'
 import { EditorPage } from './EditorPage'
@@ -8,6 +11,7 @@ import { EditorPage } from './EditorPage'
 type EmbedMessage =
   | { type: 'velxio:load-project'; project: unknown }
   | { type: 'velxio:load-example'; exampleId: string }
+  | { type: 'velxio:configure'; pins: number[] }
 
 function notifyParent(message: Record<string, unknown>) {
   if (window.parent !== window) window.parent.postMessage(message, '*')
@@ -18,7 +22,67 @@ export function EmbedPage() {
   const [ready, setReady] = useState(false)
   const [error, setError] = useState('')
   const loadingRef = useRef(false)
+  const allowedPinsRef = useRef<Set<number> | null>(null)
   const exampleId = searchParams.get('example')
+
+  // Grading consumers in the parent page need the raw evidence the simulator
+  // already produces: serial bytes and digital pin edges. Both taps are
+  // installed only while the embed is mounted and are batched per frame so a
+  // busy sketch cannot turn every byte into a separate postMessage.
+  useEffect(() => {
+    let pending: Array<{ boardId: string; pin: number; state: boolean; timeMs: number }> = []
+    let scheduled = false
+
+    const flushPins = () => {
+      scheduled = false
+      if (pending.length === 0) return
+      const events = pending
+      pending = []
+      notifyParent({ type: 'velxio:pin', events })
+    }
+
+    installSerialTap((boardId, chunk) => {
+      notifyParent({ type: 'velxio:serial', boardId, chunk })
+    })
+    installPinTap((boardId, pin, state, timeMs) => {
+      const allowed = allowedPinsRef.current
+      if (allowed && !allowed.has(pin)) return
+      pending.push({
+        boardId,
+        pin,
+        state,
+        timeMs: Math.round(timeMs * 1000) / 1000,
+      })
+      if (!scheduled) {
+        scheduled = true
+        requestAnimationFrame(flushPins)
+      }
+    })
+
+    let lastHexEpoch = useSimulatorStore.getState().hexEpoch
+    let lastRunning = useSimulatorStore.getState().running
+    const unsubscribe = useSimulatorStore.subscribe((state) => {
+      if (state.hexEpoch !== lastHexEpoch) {
+        lastHexEpoch = state.hexEpoch
+        notifyParent({ type: 'velxio:trace-reset' })
+      }
+      if (state.running !== lastRunning) {
+        lastRunning = state.running
+        notifyParent({ type: 'velxio:run-state', running: state.running })
+      }
+    })
+    notifyParent({
+      type: 'velxio:run-state',
+      running: useSimulatorStore.getState().running,
+    })
+
+    return () => {
+      installSerialTap(null)
+      installPinTap(null)
+      unsubscribe()
+      flushPins()
+    }
+  }, [])
 
   useEffect(() => {
     async function loadProject(project: unknown) {
@@ -68,6 +132,10 @@ export function EmbedPage() {
         void loadProject(message.project)
       } else if (message.type === 'velxio:load-example') {
         void loadSelectedExample(message.exampleId)
+      } else if (message.type === 'velxio:configure') {
+        allowedPinsRef.current = Array.isArray(message.pins)
+          ? new Set(message.pins.filter((pin) => typeof pin === 'number'))
+          : null
       }
     }
 
